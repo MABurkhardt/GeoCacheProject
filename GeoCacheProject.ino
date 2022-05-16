@@ -256,6 +256,19 @@ float calcBearing(float flat1, float flon1, float flat2, float flon2)
 {
 	//TODO calculate bearing to target
 	float bearing = 0.0;
+	//lat & lon in radians
+	float gpsLat = radians(flat1);
+	float targetLat = radians(flat2);
+	float deltaLat = radians(flat2 - flat1);
+	float deltaLon = radians(flon2 - flon1);
+
+	float y = sin(deltaLon) * cos(targetLat);
+	float x = (cos(gpsLat) * sin(targetLat)) - (sin(gpsLat) * cos(targetLat) * cos(deltaLon));
+
+	float ang = atan2(y, x);
+	bearing = degrees(ang);
+	bearing = fmod((bearing + 360), 360);
+	//bearing = ang;
 
 #if LOG_ON
 	Serial.print("calcBearing() returned: ");
@@ -438,8 +451,6 @@ void loop(void)
 {
 	float latDeg = 0;
 	float lonDeg = 0;
-	float dist = 0;
-	float bearing = 0;
 
 	// get GPS message
 	float relativeBearing = 0;
@@ -474,12 +485,25 @@ void loop(void)
 		lonDeg = degMin2DecDeg(lonIn, lon);
 
 		// TODO call calcdistance() calculate distance to target
-		dist = calcDistance(latDeg, lonDeg, GEOLAT0, GEOLON0);
+		distance = calcDistance(latDeg, lonDeg, GEOLAT0, GEOLON0);
 
 		// TODO call calcBearing() calculate bearing to target
-		bearing = calcBearing(latDeg, lonDeg, GEOLAT0, GEOLON0);
+		heading = calcBearing(latDeg, lonDeg, GEOLAT0, GEOLON0);
 
 		// TODO calculate relative bearing within range >= 0 and < 360
+		relativeBearing = heading - strtod(cog, NULL);
+		if (relativeBearing >= 360)
+		{
+			relativeBearing = relativeBearing - 360;
+		}
+		else if (relativeBearing < 0)
+		{
+			relativeBearing = relativeBearing + 360;
+		}
+		else
+		{
+
+		}
 
 #if LOG_ON
 		Serial.print("Relative Bearing: ");
