@@ -465,6 +465,16 @@ void loop(void)
 #endif
 
 		// TODO check button for incrementing target index 0..3
+		if (digitalRead(BUT_PIN) == LOW)
+		{
+			target++;
+			if (target > 3)
+			{
+				target = 0;
+			}
+		}
+		Serial.print("Current target: ");
+		Serial.println(target);
 
 		// TODO parse 5 parameters latitude, longitude, and hemisphere indicators, and course over ground from GPS message
 		strtok(cstr, ",");
