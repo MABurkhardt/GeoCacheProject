@@ -109,6 +109,50 @@ SoftwareSerial gps(GPS_RX, GPS_TX);
 #if NEO_ON
 #include <Adafruit_NeoPixel.h>
 Adafruit_NeoPixel strip = Adafruit_NeoPixel(40, NEO_TX, NEO_GRB + NEO_KHZ800);
+
+uint32_t targetColor = Adafruit_NeoPixel::Color(0, 0, 255);;
+
+static struct Compass
+{
+	// Number of circle segments for our LED-compass
+	int arcs = 16;
+	// angle length of each quadrant
+	float arclength = 360.0f / (float)arcs;
+	// gives an error-margin for each arc
+	float offset = arclength / 2.0f;
+
+	/*
+	Note:
+	 dividing a circle (360 degrees) in 16 arcs
+	 makes each one 22.5 degrees and gives an
+	 offset of 11.25
+	*/
+};
+
+/*
+Brighteness control Gamma correction
+https://learn.adafruit.com/led-tricks-gamma-correction/the-issue
+Compiler directive "PROGMEM" puts array in program code memory space
+*/
+const uint8_t PROGMEM gamma[] =
+{
+	0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
+	0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  1,  1,  1,  1,
+	1,  1,  1,  1,  1,  1,  1,  1,  1,  2,  2,  2,  2,  2,  2,  2,
+	2,  3,  3,  3,  3,  3,  3,  3,  4,  4,  4,  4,  4,  5,  5,  5,
+	5,  6,  6,  6,  6,  7,  7,  7,  7,  8,  8,  8,  9,  9,  9, 10,
+	10, 10, 11, 11, 11, 12, 12, 13, 13, 13, 14, 14, 15, 15, 16, 16,
+	17, 17, 18, 18, 19, 19, 20, 20, 21, 21, 22, 22, 23, 24, 24, 25,
+	25, 26, 27, 27, 28, 29, 29, 30, 31, 32, 32, 33, 34, 35, 35, 36,
+	37, 38, 39, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 50,
+	51, 52, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 66, 67, 68,
+	69, 70, 72, 73, 74, 75, 77, 78, 79, 81, 82, 83, 85, 86, 87, 89,
+	90, 92, 93, 95, 96, 98, 99,101,102,104,105,107,109,110,112,114,
+	115,117,119,120,122,124,126,127,129,131,133,135,137,138,140,142,
+	144,146,148,150,152,154,156,158,160,162,164,167,169,171,173,175,
+	177,180,182,184,186,189,191,193,196,198,200,203,205,208,210,213,
+	215,218,220,223,225,228,231,233,236,239,241,244,247,249,252,255
+};
 #endif
 
 #if SDC_ON
@@ -125,9 +169,15 @@ flags located on Full Sail campus.
 */
 #define GEOLAT0 28.594532
 #define GEOLON0 -81.304437
+#define GEOLAT1 2.222222
+#define GEOLON1 -2.222222
+#define GEOLAT2 3.333333
+#define GEOLON2 -3.333333
+#define GEOLAT3 4.444444
+#define GEOLON3 -4.444444
 
 //TODO create array to hold 4x coordinates of flags
-float coordArr[8];
+float coordArr[8] = { GEOLAT0, GEOLON0, GEOLAT1, GEOLON1, GEOLAT2, GEOLON2, GEOLAT3, GEOLON3 };
 
 #if GPS_ON
 /*
@@ -283,20 +333,53 @@ float calcBearing(float flat1, float flon1, float flat2, float flon2)
 *************************************************/
 
 #if NEO_ON
-/*
-Sets target number, heading and distance on NeoPixel Display
-
-Don't forget to include brightness control using the
-potentiometer.
-
-*/
-void setNeoPixel(uint8_t target, float heading, float distance)
+void setNeoPixel(uint8_t target, float heading, float distance, uint8_t potentiometer)
 {
+	// wipes previously set LED's
+	strip.clear();
+
+	int8_t compassLED = (heading + Compass().offset) / Compass().arclength;
+
+	switch (target)
+	{
+	case 0:
+	{
+		targetColor = strip.Color(255, 255, 0);
+		strip.setPixelColor(compassLED, targetColor);
+
+
+		break;
+	}
+	case 1:
+	{
+		targetColor = strip.Color(255, 0, 255);
+		break;
+	}
+	case 2:
+	{
+		targetColor = strip.Color(0, 255, 255);
+		break;
+	}
+	case 3:
+	{
+		targetColor = strip.Color(255, 255, 255);
+		break;
+	};
+	default:
+	{
+		targetColor = strip.Color(255, 0, 0);
+		break;
+	}
+	}
+
+	if (BUT_PIN == LOW)
+	{
+	}
+
 	/*
 		TODO display of target, heading, distance
 	*/
 }
-
 #endif	// NEO_ON
 
 #if GPS_ON
@@ -429,6 +512,7 @@ void setup(void)
 	// TODO init NeoPixel Shield
 	strip.begin();
 	strip.show();
+	strip.setBrightness(10);
 #endif	
 
 #if SDC_ON
@@ -452,6 +536,11 @@ void loop(void)
 	float latDeg = 0;
 	float lonDeg = 0;
 
+	// for potentiometer
+	static float pot_in = 0;
+	static int16_t pot_out = 0;
+	static uint8_t gammaOutput = 0;
+
 	// get GPS message
 	float relativeBearing = 0;
 	char* cstr = getGpsMessage();
@@ -468,7 +557,7 @@ void loop(void)
 		if (digitalRead(BUT_PIN) == LOW)
 		{
 			target++;
-			if (target > 3)
+			if (target == 3)
 			{
 				target = 0;
 			}
@@ -526,6 +615,11 @@ void loop(void)
 
 #if NEO_ON
 		// TODO call setNeoPixel() to display target, distance & direction on NeoPixel
+		pot_in = analogRead(POT_PIN);
+		pot_out = map(pot_in, 0, 1023, 0, 255);
+		gammaOutput = pgm_read_byte(&gamma[output]);
+
+		setNeoPixel(target, heading, distance, gammaOutput);
 #endif			
 	}
 }
