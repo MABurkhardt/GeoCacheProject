@@ -82,9 +82,9 @@ There may not be sufficient room in the PROGRAM or DATA memory to
 enable all these libraries at the same time.  You must have NEO_ON,
 GPS_ON and SDC_ON during the actual GeoCache Flag Hunt on Finals Day.
 */
-#define NEO_ON 0		// NeoPixel Shield (0=OFF, 1=ON)
+#define NEO_ON 1		// NeoPixel Shield (0=OFF, 1=ON)
 #define LOG_ON 1		// Serial Terminal Logging (0=OFF, 1=ON)
-#define SDC_ON 0		// Secure Digital Card (0=OFF, 1=ON)
+#define SDC_ON 1		// Secure Digital Card (0=OFF, 1=ON)
 #define GPS_ON 0		// 0 = simulated GPS message, 1 = actual GPS message
 
 // define pin usage
@@ -93,6 +93,8 @@ GPS_ON and SDC_ON during the actual GeoCache Flag Hunt on Finals Day.
 #define GPS_RX	8		// GPS receive
 
 #define BUT_PIN 2
+#define POT_PIN A0
+#define SD_PIN 3
 
 #define GPS_BUFSIZ	96	// max size of GPS char buffer
 
@@ -112,7 +114,7 @@ Adafruit_NeoPixel strip = Adafruit_NeoPixel(40, NEO_TX, NEO_GRB + NEO_KHZ800);
 
 uint32_t targetColor = Adafruit_NeoPixel::Color(0, 0, 255);;
 
-static struct Compass
+struct Compass
 {
 	// Number of circle segments for our LED-compass
 	int arcs = 16;
@@ -169,15 +171,17 @@ flags located on Full Sail campus.
 */
 #define GEOLAT0 28.594532
 #define GEOLON0 -81.304437
-#define GEOLAT1 2.222222
-#define GEOLON1 -2.222222
-#define GEOLAT2 3.333333
-#define GEOLON2 -3.333333
-#define GEOLAT3 4.444444
-#define GEOLON3 -4.444444
+#define GEOLAT1 30
+#define GEOLON1 -30
+#define GEOLAT2 40
+#define GEOLON2 90
+#define GEOLAT3 -70
+#define GEOLON3 -120
 
 //TODO create array to hold 4x coordinates of flags
 float coordArr[8] = { GEOLAT0, GEOLON0, GEOLAT1, GEOLON1, GEOLAT2, GEOLON2, GEOLAT3, GEOLON3 };
+uint8_t compArr[16] = {23, 31, 39, 38, 37, 36, 35, 27, 19, 11, 3, 4, 5, 6, 7, 15};
+uint8_t distArr[15] = {2, 10, 18, 26, 34, 1, 9, 17, 25, 33, 0, 8, 16, 24, 32};
 
 #if GPS_ON
 /*
@@ -345,9 +349,6 @@ void setNeoPixel(uint8_t target, float heading, float distance, uint8_t potentio
 	case 0:
 	{
 		targetColor = strip.Color(255, 255, 0);
-		strip.setPixelColor(compassLED, targetColor);
-
-
 		break;
 	}
 	case 1:
@@ -371,6 +372,8 @@ void setNeoPixel(uint8_t target, float heading, float distance, uint8_t potentio
 		break;
 	}
 	}
+	strip.setPixelColor(compArr[compassLED], targetColor);
+	strip.show();
 
 	if (BUT_PIN == LOW)
 	{
@@ -516,11 +519,21 @@ void setup(void)
 #endif	
 
 #if SDC_ON
-// TODO init SecureDigital and open "MyMap.txt" filename for writing
+	// TODO init SecureDigital and open "MyMap.txt" filename for writing
+	if (!SD.begin())
+	{
+		Serial.println("initalization failed");
+		while (true)
+		{
+
+		}
+	}
+	Serial.println("initialization done");
+	myFile = SD.open("MyMap.txt", FILE_WRITE);
 #endif
 
 #if GPS_ON
-// configures receiving GPS GPRMC message
+	// configures receiving GPS GPRMC message
 	gps.begin(9600);
 	gps.println(PMTK_SET_NMEA_UPDATE_1HZ);
 	gps.println(PMTK_API_SET_FIX_CTL_1HZ);
@@ -557,7 +570,7 @@ void loop(void)
 		if (digitalRead(BUT_PIN) == LOW)
 		{
 			target++;
-			if (target == 3)
+			if (target > 3)
 			{
 				target = 0;
 			}
@@ -584,10 +597,28 @@ void loop(void)
 		lonDeg = degMin2DecDeg(lonIn, lon);
 
 		// TODO call calcdistance() calculate distance to target
-		distance = calcDistance(latDeg, lonDeg, GEOLAT0, GEOLON0);
-
 		// TODO call calcBearing() calculate bearing to target
-		heading = calcBearing(latDeg, lonDeg, GEOLAT0, GEOLON0);
+		switch (target)
+		{
+		case 0:
+			distance = calcDistance(latDeg, lonDeg, coordArr[0], coordArr[1]);
+			heading = calcBearing(latDeg, lonDeg, coordArr[0], coordArr[1]);
+			break;
+		case 1:
+			distance = calcDistance(latDeg, lonDeg, coordArr[2], coordArr[3]);
+			heading = calcBearing(latDeg, lonDeg, coordArr[2], coordArr[3]);
+			break;
+		case 2:
+			distance = calcDistance(latDeg, lonDeg, coordArr[4], coordArr[5]);
+			heading = calcBearing(latDeg, lonDeg, coordArr[4], coordArr[5]);
+			break;
+		case 3:
+			distance = calcDistance(latDeg, lonDeg, coordArr[6], coordArr[7]);
+			heading = calcBearing(latDeg, lonDeg, coordArr[6], coordArr[7]);
+			break;
+		default:
+			break;
+		}
 
 		// TODO calculate relative bearing within range >= 0 and < 360
 		relativeBearing = heading - strtod(cog, NULL);
@@ -611,13 +642,31 @@ void loop(void)
 
 #if SDC_ON
 		// TODO write required data to SecureDigital then execute flush()
+		if (myFile) 
+		{
+			Serial.print("Writing to MyMap.txt...");
+			myFile.print(latDeg, 6);
+			myFile.print(",");
+			myFile.print(lonDeg, 6);
+			myFile.print(",");
+			myFile.print((int)relativeBearing);
+			myFile.print(".");
+			myFile.println((int)distance);
+			myFile.flush();
+			Serial.println("done.");
+		}
+		else 
+		{
+			// if the file didn't open, print an error:
+			Serial.println("error opening test.txt");
+		}
 #endif
 
 #if NEO_ON
 		// TODO call setNeoPixel() to display target, distance & direction on NeoPixel
 		pot_in = analogRead(POT_PIN);
 		pot_out = map(pot_in, 0, 1023, 0, 255);
-		gammaOutput = pgm_read_byte(&gamma[output]);
+		gammaOutput = pgm_read_byte(&gamma[pot_out]);
 
 		setNeoPixel(target, heading, distance, gammaOutput);
 #endif			
