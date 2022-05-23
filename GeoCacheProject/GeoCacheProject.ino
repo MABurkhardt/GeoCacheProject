@@ -170,17 +170,17 @@ flags located on Full Sail campus.
 */
 #define GEOLAT0 28.594532
 #define GEOLON0 -81.304437
-#define GEOLAT1 30
-#define GEOLON1 -30
-#define GEOLAT2 40
-#define GEOLON2 90
-#define GEOLAT3 -70
-#define GEOLON3 -120
+#define GEOLAT1 23.11875
+#define GEOLON1 120.27405
+#define GEOLAT2 23.118
+#define GEOLON2 120.274
+#define GEOLAT3 23.115
+#define GEOLON3 120.274
 
 //TODO create array to hold 4x coordinates of flags
 float coordArr[8] = { GEOLAT0, GEOLON0, GEOLAT1, GEOLON1, GEOLAT2, GEOLON2, GEOLAT3, GEOLON3 };
 uint8_t compArr[16] = {23, 31, 39, 38, 37, 36, 35, 27, 19, 11, 3, 4, 5, 6, 7, 15};
-uint8_t distArr[15] = {2, 10, 18, 26, 34, 1, 9, 17, 25, 33, 0, 8, 16, 24, 32};
+uint8_t distArr[15] = {32, 24, 16, 8, 0, 33, 25, 17, 9, 1, 34, 26, 18, 10, 2};
 
 #if GPS_ON
 /*
@@ -344,6 +344,7 @@ void setNeoPixel(uint8_t target, float heading, float distance, uint8_t potentio
 	strip.setBrightness(potentiometer);
 
 	int8_t compassLED = (heading + Compass().offset) / Compass().arclength;
+	uint16_t distLED = map((int)distance, 0, 2500, 0, 15);
 
 	switch (target)
 	{
@@ -373,6 +374,7 @@ void setNeoPixel(uint8_t target, float heading, float distance, uint8_t potentio
 		break;
 	}
 	}
+	strip.setPixelColor(distArr[distLED], targetColor);
 	strip.setPixelColor(compArr[compassLED], targetColor);
 	strip.show();
 
@@ -669,7 +671,7 @@ void loop(void)
 		pot_out = map(pot_in, 0, 1023, 0, 255);
 		gammaOutput = pgm_read_byte(&gamma[pot_out]);
 
-		setNeoPixel(target, heading, distance, gammaOutput);
+		setNeoPixel(target, relativeBearing, distance, gammaOutput);
 #endif			
 	}
 }
