@@ -170,12 +170,12 @@ flags located on Full Sail campus.
 */
 #define GEOLAT0 28.594532
 #define GEOLON0 -81.304437
-#define GEOLAT1 23.11875
-#define GEOLON1 120.27405
-#define GEOLAT2 23.118
-#define GEOLON2 120.274
-#define GEOLAT3 23.115
-#define GEOLON3 120.274
+#define GEOLAT1 28.59453
+#define GEOLON1 -81.30443
+#define GEOLAT2 28.5945
+#define GEOLON2 -81.3044
+#define GEOLAT3 28.594
+#define GEOLON3 -81.304
 
 //TODO create array to hold 4x coordinates of flags
 float coordArr[8] = { GEOLAT0, GEOLON0, GEOLAT1, GEOLON1, GEOLAT2, GEOLON2, GEOLAT3, GEOLON3 };
@@ -237,7 +237,7 @@ float degMin2DecDeg(char* cind, char* ccor)
 	minutesStore = ccorStore - degStore;
 	degrees = degrees + (minutesStore / 60);
 	
-	if (cind == "W" || cind == "S")
+	if (*cind == 'W' || *cind == 'S')
 	{
 		degrees = degrees * -1;
 	}
@@ -375,7 +375,7 @@ void setNeoPixel(uint8_t target, float heading, float distance, uint8_t potentio
 	}
 	}
 	strip.setPixelColor(distArr[distLED], targetColor);
-	strip.setPixelColor(compArr[compassLED], targetColor);
+	strip.setPixelColor(compArr[compassLED % 16], targetColor);
 	strip.show();
 
 	if (BUT_PIN == LOW)
@@ -499,13 +499,20 @@ char* getGpsMessage(void)
 	// provide message every second
 	if (timestamp >= timenow) return(nullptr);
 
-	memcpy(cstr, "$GPRMC,064951.000,A,2307.1256,N,12016.4438,E,0.03,165.48,260406,3.05,W,A*2C", sizeof(cstr));
+	//#define GEOLAT0 28.594532 2307.1256
+	//#define GEOLON0 -81.304437 12016.4438
+	memcpy(cstr, "$GPRMC,064951.000,A,2835.33,N,08118.12,W,0.03,165.48,260406,3.05,W,A*2C", sizeof(cstr));
 
 	timestamp = timenow + 1000;
 
 	return(cstr);
 }
 #endif
+
+//used in loop
+float latDeg = 0;
+float lonDeg = 0;
+float relativeBearing = 0;
 
 void setup(void)
 {
@@ -549,16 +556,12 @@ void setup(void)
 
 void loop(void)
 {
-	float latDeg = 0;
-	float lonDeg = 0;
-
 	// for potentiometer
 	static float pot_in = 0;
 	static int16_t pot_out = 0;
 	static uint8_t gammaOutput = 0;
 
 	// get GPS message
-	float relativeBearing = 0;
 	char* cstr = getGpsMessage();
 
 	// if valid message delivered (happens once a second)
@@ -568,7 +571,6 @@ void loop(void)
 		// print the GPRMC message
 		Serial.println(cstr);
 #endif
-
 		// TODO check button for incrementing target index 0..3
 		if (digitalRead(BUT_PIN) == LOW)
 		{
