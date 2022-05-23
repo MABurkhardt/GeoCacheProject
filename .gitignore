@@ -1,0 +1,8 @@
+# Ignore __vm
+GeoCacheProject/__vm
+
+# Ignore Release
+GeoCacheProject/Release
+
+# VisualMicro uses absolute paths, ignore the vcxproj
+GeoCacheProject/GeoCacheProject.vcxproj
