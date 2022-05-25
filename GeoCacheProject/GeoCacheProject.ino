@@ -93,7 +93,12 @@ GPS_ON and SDC_ON during the actual GeoCache Flag Hunt on Finals Day.
 #define GPS_RX	8		// GPS receive
 
 #define BUT_PIN 2
+#define SCA_PIN 4
 #define POT_PIN A0
+#define BUT_TS 500
+#define RED_PIN 3
+#define GRN_PIN 5
+#define BLU_PIN 9
 
 #define GPS_BUFSIZ	96	// max size of GPS char buffer
 
@@ -101,6 +106,11 @@ GPS_ON and SDC_ON during the actual GeoCache Flag Hunt on Finals Day.
 uint8_t target = 0;		// target number
 float heading = 0.0;	// target heading
 float distance = 0.0;	// target distance
+uint8_t scale = 0;		// scale of distance LED
+
+uint8_t butPress = HIGH;	// bool for target button presses
+uint8_t scaPress = HIGH;	// bool for scale button presses
+uint32_t timestamp_0 = 0;	// timestamp for all button presses
 
 #if GPS_ON
 #include <SoftwareSerial.h>
@@ -111,7 +121,8 @@ SoftwareSerial gps(GPS_RX, GPS_TX);
 #include <Adafruit_NeoPixel.h>
 Adafruit_NeoPixel strip = Adafruit_NeoPixel(40, NEO_TX, NEO_GRB + NEO_KHZ800);
 
-uint32_t targetColor = Adafruit_NeoPixel::Color(0, 0, 255);;
+uint32_t targetColor = Adafruit_NeoPixel::Color(0, 0, 255);
+uint32_t targetDistance;
 
 struct Compass
 {
@@ -336,7 +347,7 @@ float calcBearing(float flat1, float flon1, float flat2, float flon2)
 *************************************************/
 
 #if NEO_ON
-void setNeoPixel(uint8_t target, float heading, float distance, uint8_t potentiometer)
+void setNeoPixel(uint8_t target, float heading, float distance, uint8_t potentiometer, uint8_t scale)
 {
 	// wipes previously set LED's
 	strip.clear();
@@ -344,7 +355,29 @@ void setNeoPixel(uint8_t target, float heading, float distance, uint8_t potentio
 	strip.setBrightness(potentiometer);
 
 	int8_t compassLED = (heading + Compass().offset) / Compass().arclength;
-	uint16_t distLED = map((int)distance, 0, 2500, 0, 15);
+	uint16_t distLED;
+
+	switch (scale)
+	{
+	case 0:
+	{
+		distLED = map((int)distance, 0, 2500, 0, 15);
+		targetDistance = strip.Color(255, 0, 30);
+		break;
+	}
+	case 1:
+	{
+		distLED = map((int)distance, 0, 1000, 0, 15);
+		targetDistance = strip.Color(15, 15, 255);
+		break;
+	}
+	case 2:
+	{
+		distLED = map((int)distance, 0, 100, 0, 15);
+		targetDistance = strip.Color(0, 255, 30);
+		break;
+	}
+	}
 
 	switch (target)
 	{
@@ -367,20 +400,11 @@ void setNeoPixel(uint8_t target, float heading, float distance, uint8_t potentio
 	{
 		targetColor = strip.Color(255, 255, 255);
 		break;
-	};
-	default:
-	{
-		targetColor = strip.Color(255, 0, 0);
-		break;
 	}
 	}
-	strip.setPixelColor(distArr[distLED], targetColor);
-	strip.setPixelColor(compArr[compassLED % 16], targetColor);
+	strip.setPixelColor(distArr[distLED], targetDistance);
+	strip.setPixelColor(compArr[compassLED], targetColor);
 	strip.show();
-
-	if (BUT_PIN == LOW)
-	{
-	}
 
 	/*
 		TODO display of target, heading, distance
@@ -552,10 +576,28 @@ void setup(void)
 
 	// TODO: set target button pinmode
 	pinMode(BUT_PIN, INPUT_PULLUP);
+	pinMode(SCA_PIN, INPUT_PULLUP);
+
+	// initialize RGB LED
+	pinMode(RED_PIN, OUTPUT);
+	pinMode(GRN_PIN, OUTPUT);
+	pinMode(BLU_PIN, OUTPUT);
+
+	// initial scale and target
+	analogWrite(RED_PIN, 40);
+	analogWrite(GRN_PIN, 0);
+	analogWrite(BLU_PIN, 4);
+	Serial.print("Current target: ");
+	Serial.println(target);
+	Serial.print("Current scale: ");
+	Serial.println(scale);
 }
 
 void loop(void)
 {
+	//get current time
+	uint32_t timenow = millis();
+
 	// for potentiometer
 	static float pot_in = 0;
 	static int16_t pot_out = 0;
@@ -563,6 +605,70 @@ void loop(void)
 
 	// get GPS message
 	char* cstr = getGpsMessage();
+
+	if (timestamp_0 <= timenow)
+	{
+		// if button press changed
+		if (digitalRead(BUT_PIN) != butPress)
+		{
+			if (butPress == LOW)
+			{
+				target++;
+				if (target > 3)
+				{
+					target = 0;
+				}
+				Serial.print("Current target: ");
+				Serial.println(target);
+			}
+			butPress = !butPress;
+			timestamp_0 = timenow + BUT_TS;
+		}
+	}
+
+	if (timestamp_0 <= timenow)
+	{
+		if (digitalRead(SCA_PIN) != scaPress)
+		{
+			if (scaPress == LOW)
+			{
+				scale++;
+				if (scale > 2)
+				{
+					scale = 0;
+				}
+
+				switch (scale)
+				{
+				case 0:
+				{
+					analogWrite(RED_PIN, 40);
+					analogWrite(GRN_PIN, 0);
+					analogWrite(BLU_PIN, 4);
+					break;
+				}
+				case 1:
+				{
+					analogWrite(RED_PIN, 2);
+					analogWrite(GRN_PIN, 2);
+					analogWrite(BLU_PIN, 40);
+					break;
+				}
+				case 2:
+				{
+					analogWrite(RED_PIN, 0);
+					analogWrite(GRN_PIN, 40);
+					analogWrite(BLU_PIN, 4);
+					break;
+				}
+				}
+				Serial.print("Current scale: ");
+				Serial.println(scale);
+			}
+			scaPress = !scaPress;
+			timestamp_0 = timenow + BUT_TS;
+		}
+	}
 
 	// if valid message delivered (happens once a second)
 	if (cstr)
@@ -572,14 +678,6 @@ void loop(void)
 		Serial.println(cstr);
 #endif
 		// TODO check button for incrementing target index 0..3
-		if (digitalRead(BUT_PIN) == LOW)
-		{
-			target++;
-			if (target > 3)
-			{
-				target = 0;
-			}
-		}
 		Serial.print("Current target: ");
 		Serial.println(target);
 
@@ -673,7 +771,7 @@ void loop(void)
 		pot_out = map(pot_in, 0, 1023, 0, 255);
 		gammaOutput = pgm_read_byte(&gamma[pot_out]);
 
-		setNeoPixel(target, relativeBearing, distance, gammaOutput);
+		setNeoPixel(target, relativeBearing, distance, gammaOutput, scale);
 #endif			
 	}
 }
